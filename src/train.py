@@ -348,7 +348,7 @@ class Trainer:
         model_path = checkpoint_dir / "pytorch_model.bin"
         torch.save(self.model.state_dict(), model_path)
         
-        # Save config
+        # Save config (JSON is correct here)
         config_path = checkpoint_dir / "config.json"
         model_config = {
             'vocab_size': self.model.vocab_size,
@@ -361,7 +361,7 @@ class Trainer:
         with open(config_path, 'w') as f:
             json.dump(model_config, f, indent=2)
         
-        # Save training state
+        # 🔥 FIX: Save training state using torch.save
         state = {
             'global_step': self.global_step,
             'epoch': self.epoch,
@@ -369,11 +369,11 @@ class Trainer:
             'optimizer_state': self.optimizer.state_dict(),
             'scheduler_state': self.scheduler.state_dict(),
         }
-        state_path = checkpoint_dir / "training_state.json"
-        with open(state_path, 'w') as f:
-            json.dump(state, f, indent=2)
+        state_path = checkpoint_dir / "training_state.pt"
+        torch.save(state, state_path)
         
         print(f"Checkpoint saved to {checkpoint_dir}")
+
     
     def load_checkpoint(self, name: str):
         """Load model checkpoint"""
@@ -381,18 +381,25 @@ class Trainer:
         
         # Load model
         model_path = checkpoint_dir / "pytorch_model.bin"
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model.load_state_dict(
+            torch.load(model_path, map_location=self.device)
+        )
         
-        # Load training state
-        state_path = checkpoint_dir / "training_state.json"
+        # 🔥 FIX: Load training state using torch.load
+        state_path = checkpoint_dir / "training_state.pt"
         if state_path.exists():
-            with open(state_path, 'r') as f:
-                state = json.load(f)
+            state = torch.load(state_path, map_location=self.device)
+            
             self.global_step = state['global_step']
             self.epoch = state['epoch']
             self.best_val_loss = state['best_val_loss']
+            
+            # 🔥 Important: Restore optimizer & scheduler
+            self.optimizer.load_state_dict(state['optimizer_state'])
+            self.scheduler.load_state_dict(state['scheduler_state'])
         
         print(f"Checkpoint loaded from {checkpoint_dir}")
+
 
 
 def main():
